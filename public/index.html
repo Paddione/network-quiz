@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Netzwerk-Quiz Multiplayer</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Netzwerk-Quiz Multiplayer</h1>
+        
+        <!-- Login Screen -->
+        <div id="loginScreen" class="card">
+            <h2>Willkommen zum Netzwerk-Quiz!</h2>
+            <p>Teste dein Wissen über Computernetze</p>
+            <input type="text" id="playerName" placeholder="Dein Name">
+            <button onclick="joinGame()">Beitreten</button>
+        </div>
+
+        <!-- Waiting Room -->
+        <div id="waitingRoom" class="card hidden">
+            <h2>Warte auf Mitspieler...</h2>
+            <div class="waiting">
+                <div id="playerList"></div>
+                <p>Das Spiel startet, sobald zwei Spieler beigetreten sind.</p>
+            </div>
+        </div>
+
+        <!-- Game Screen -->
+        <div id="gameScreen" class="hidden">
+            <div class="chapter-progress" id="chapterProgress"></div>
+            
+            <div class="card">
+                <h2 id="chapterTitle"></h2>
+                <div class="timer" id="timer">30</div>
+                
+                <div class="question">
+                    <h3 id="questionText"></h3>
+                    <div id="answerArea"></div>
+                </div>
+                
+                <div id="explanation" class="explanation hidden"></div>
+                
+                <button id="nextButton" class="hidden" onclick="nextQuestion()">Nächste Frage</button>
+            </div>
+
+            <div class="scores">
+                <div class="score-card">
+                    <h3 id="player1Name"></h3>
+                    <div id="player1Score">0</div>
+                </div>
+                <div class="score-card">
+                    <h3 id="player2Name"></h3>
+                    <div id="player2Score">0</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Chapter Result Screen -->
+        <div id="chapterResult" class="card hidden">
+            <h2 id="chapterResultTitle"></h2>
+            <div id="chapterResultContent"></div>
+            <button onclick="nextChapter()">Nächstes Kapitel</button>
+        </div>
+
+        <!-- Final Result Screen -->
+        <div id="finalResult" class="card hidden">
+            <h2>Spiel beendet!</h2>
+            <div id="finalResultContent"></div>
+            <button onclick="restartGame()">Neues Spiel</button>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="quizData.js"></script>
+    <script src="game.js"></script>
+</body>
+</html>

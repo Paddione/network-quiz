@@ -1,0 +1,17 @@
+version: '3'
+services:
+  quiz-app:
+    build: .
+    ports:
+      - "3000:3000"  # You can keep this for direct access or remove it if only using NPM
+    restart: unless-stopped
+    volumes:
+      - ./public:/usr/src/app/public:ro
+    environment:
+      - NODE_ENV=production
+    networks:
+      - npm_network
+
+networks:
+  npm_network:
+    external: true  # This means the network is created elsewhere (by NPM)
