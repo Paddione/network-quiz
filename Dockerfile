@@ -1,17 +1,23 @@
+# Use an official Node.js runtime as the base image
 FROM node:18-alpine
 
-# Create app directory
+# Set the working directory in the container
 WORKDIR /usr/src/app
 
-# Install app dependencies
+# Copy package.json and package-lock.json
 COPY package*.json ./
+
+# Install dependencies
 RUN npm install
 
-# Bundle app source
+# Copy all project files to the working directory
 COPY . .
 
-# Expose port
+# Expose the port the app runs on
 EXPOSE 3000
 
-# Start command
-CMD [ "node", "server.js" ]
+# Create uploads directory with proper permissions
+RUN mkdir -p uploads && chmod 777 uploads
+
+# Command to run the application
+CMD ["npm", "start"]

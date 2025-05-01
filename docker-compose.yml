@@ -1,17 +1,27 @@
-version: '3'
+version: '3.8'
 services:
-  quiz-app:
+  app:
     build: .
-    ports:
-      - "3000:3000"  # You can keep this for direct access or remove it if only using NPM
+    container_name: network-quiz-app
     restart: unless-stopped
-    volumes:
-      - ./public:/usr/src/app/public:ro
+    ports:
+      - "3000:3000"
     environment:
       - NODE_ENV=production
+      # Host machine's database connection
+      - PGUSER=quizadmin
+      - PGHOST=host.docker.internal
+      - PGDATABASE=network_quiz
+      - PGPASSWORD=170591pk
+      - PGPORT=5432
+      - SESSION_SECRET=170591pk
+    volumes:
+      - ./uploads:/usr/src/app/uploads
+    # Add this section to enable host.docker.internal on Linux
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks:
       - npm_network
-
 networks:
   npm_network:
-    external: true  # This means the network is created elsewhere (by NPM)
+    external: true
