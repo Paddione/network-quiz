@@ -40,6 +40,37 @@ const quizRoutes = require('./routes/quiz');
 app.use('/', authRoutes);
 app.use('/admin', adminRoutes);
 app.use('/api/quiz', quizRoutes);
+// Get active games
+router.get('/api/games/active', async (req, res) => {
+    try {
+        const result = await db.query(
+            `SELECT 
+                g.id, 
+                g.game_code, 
+                g.is_multiplayer,
+                g.player_count,
+                CASE WHEN g.is_multiplayer THEN 5 ELSE 1 END AS max_players,
+                qs.title AS quiz_title
+            FROM 
+                games g
+            JOIN 
+                quiz_sets qs ON g.quiz_set_id = qs.id
+            WHERE 
+                g.ended_at IS NULL
+                AND g.started_at > NOW() - INTERVAL '30 minutes'
+                AND (NOT g.is_multiplayer OR g.player_count < 5)
+            ORDER BY 
+                g.started_at DESC
+            LIMIT 20`
+        );
+
+        res.json(result.rows);
+
+    } catch (error) {
+        console.error('Active games fetch error:', error);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
 
 // Game state
 let games = {};

@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spiellobby - Netzwerk-Quiz</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .lobby-container {
+            max-width: 1000px;
+            margin: 20px auto;
+        }
+
+        .lobby-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+        }
+
+        .user-info span {
+            margin-right: 15px;
+            font-weight: bold;
+        }
+
+        .game-sections {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .section-card {
+            background-color: #fff;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            padding: 20px;
+        }
+
+        .section-card h3 {
+            margin-top: 0;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+        }
+
+        .game-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .game-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            margin-bottom: 10px;
+            background-color: #f9f9f9;
+            border-radius: 5px;
+            border-left: 4px solid var(--primary-color);
+        }
+
+        .game-info {
+            flex: 1;
+        }
+
+        .game-info h4 {
+            margin: 0 0 5px 0;
+        }
+
+        .game-info p {
+            margin: 0;
+            font-size: 14px;
+            color: #666;
+        }
+
+        .quiz-packages {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        .package-item {
+            padding: 15px;
+            background-color: #f9f9f9;
+            border-radius: 5px;
+            cursor: pointer;
+            border: 2px solid #eee;
+            transition: all 0.3s ease;
+        }
+
+        .package-item:hover {
+            border-color: var(--primary-color);
+            background-color: #f0f0f0;
+        }
+
+        .package-item.selected {
+            border-color: var(--primary-color);
+            background-color: #e6f7ff;
+        }
+
+        .package-item h4 {
+            margin: 0 0 5px 0;
+        }
+
+        .package-item p {
+            margin: 0;
+            font-size: 14px;
+            color: #666;
+        }
+
+        .btn {
+            padding: 10px 15px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary {
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        .btn-secondary {
+            background-color: #6c757d;
+            color: white;
+        }
+
+        .btn:hover {
+            opacity: 0.9;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        .error-message {
+            color: var(--wrong-color);
+            margin-top: 10px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="lobby-container">
+        <div class="lobby-header">
+            <h2>Netzwerk-Quiz Spiellobby</h2>
+            <div class="user-info">
+                <span id="username">Gast</span>
+                <a href="/profile" class="btn btn-secondary">Profil</a>
+                <a href="/logout" class="btn btn-secondary">Abmelden</a>
+            </div>
+        </div>
+
+        <div class="game-sections">
+            <!-- Available Games Section -->
+            <div class="section-card">
+                <h3>Verfügbare Spiele</h3>
+                <div class="game-list" id="gameList">
+                    <p id="noGamesMessage">Derzeit sind keine Spiele verfügbar.</p>
+                    <!-- Game items will be added here dynamically -->
+                </div>
+                <div style="margin-top: 15px;">
+                    <button id="refreshGamesBtn" class="btn btn-secondary">Aktualisieren</button>
+                    <button id="joinGameBtn" class="btn btn-primary" disabled>Spiel beitreten</button>
+                </div>
+            </div>
+
+            <!-- Create Game Section -->
+            <div class="section-card">
+                <h3>Neues Spiel erstellen</h3>
+                <div id="errorMessage" class="error-message"></div>
+
+                <div class="form-group">
+                    <label for="playerName">Dein Spielername:</label>
+                    <input type="text" id="playerName" placeholder="Name im Spiel">
+                </div>
+
+                <div class="form-group">
+                    <label for="gameType">Spieltyp:</label>
+                    <select id="gameType">
+                        <option value="single">Einzelspieler</option>
+                        <option value="multi">Mehrspieler</option>
+                    </select>
+                </div>
+
+                <h4>Wähle ein Quizpaket:</h4>
+                <div class="quiz-packages" id="quizPackages">
+                    <!-- Quiz packages will be added here dynamically -->
+                    <p id="loadingPackages">Lade Quizpakete...</p>
+                </div>
+
+                <div style="margin-top: 20px; text-align: right;">
+                    <button id="createGameBtn" class="btn btn-primary">Spiel erstellen</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // User info
+    let currentUser = null;
+    let selectedPackage = null;
+    let selectedGame = null;
+
+    // Check if user is logged in
+    async function checkAuth() {
+        try {
+            const response = await fetch('/api/check-auth');
+            const data = await response.json();
+
+            if (data.authenticated) {
+                currentUser = data;
+                document.getElementById('username').textContent = data.username;
+
+                // Set default player name to username
+                document.getElementById('playerName').value = data.username;
+            } else {
+                // Redirect to login if not authenticated
+                window.location.href = '/login';
+            }
+        } catch (error) {
+            console.error('Auth check error:', error);
+        }
+    }
+
+    // Fetch available quiz packages
+    async function fetchQuizPackages() {
+        try {
+            const response = await fetch('/api/quiz/sets');
+            const packages = await response.json();
+
+            const packagesContainer = document.getElementById('quizPackages');
+
+            if (packages.length === 0) {
+                packagesContainer.innerHTML = '<p>Keine Quizpakete verfügbar.</p>';
+                return;
+            }
+
+            let packagesHTML = '';
+
+            packages.forEach(pkg => {
+                packagesHTML += `
+                    <div class="package-item" data-id="${pkg.id}">
+                        <h4>${pkg.title}</h4>
+                        <p>${pkg.chapters_count} Kapitel, ${pkg.questions_count} Fragen</p>
+                    </div>
+                `;
+            });
+
+            packagesContainer.innerHTML = packagesHTML;
+
+            // Add click event to package items
+            document.querySelectorAll('.package-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    // Remove selected class from all items
+                    document.querySelectorAll('.package-item').forEach(i => {
+                        i.classList.remove('selected');
+                    });
+
+                    // Add selected class to clicked item
+                    item.classList.add('selected');
+
+                    // Store selected package id
+                    selectedPackage = item.dataset.id;
+                });
+            });
+
+        } catch (error) {
+            console.error('Fetch quiz packages error:', error);
+            document.getElementById('quizPackages').innerHTML = '<p>Fehler beim Laden der Quizpakete.</p>';
+        }
+    }
+
+    // Fetch available games
+    async function fetchGames() {
+        try {
+            // You'll need to create this API endpoint to return active games
+            const response = await fetch('/api/games/active');
+            const games = await response.json();
+
+            const gameList = document.getElementById('gameList');
+            const noGamesMessage = document.getElementById('noGamesMessage');
+
+            if (games.length === 0) {
+                noGamesMessage.style.display = 'block';
+                gameList.innerHTML = '';
+                return;
+            }
+
+            noGamesMessage.style.display = 'none';
+
+            let gamesHTML = '';
+            games.forEach(game => {
+                gamesHTML += `
+                    <div class="game-item" data-id="${game.id}" data-code="${game.game_code}">
+                        <div class="game-info">
+                            <h4>${game.quiz_title}</h4>
+                            <p>Spieler: ${game.player_count}/${game.max_players} • Typ: ${game.is_multiplayer ? 'Mehrspieler' : 'Einzelspieler'}</p>
+                        </div>
+                        <button class="btn btn-primary join-btn">Beitreten</button>
+                    </div>
+                `;
+            });
+
+            gameList.innerHTML = gamesHTML;
+
+            // Add click events to join buttons
+            document.querySelectorAll('.join-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const gameItem = btn.closest('.game-item');
+                    const gameId = gameItem.dataset.id;
+                    const gameCode = gameItem.dataset.code;
+
+                    joinGame(gameId, gameCode);
+                });
+            });
+
+            // Make entire game item clickable to select
+            document.querySelectorAll('.game-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    // Remove selected class from all items
+                    document.querySelectorAll('.game-item').forEach(i => {
+                        i.classList.remove('selected');
+                    });
+
+                    // Add selected class to clicked item
+                    item.classList.add('selected');
+
+                    // Store selected game
+                    selectedGame = {
+                        id: item.dataset.id,
+                        code: item.dataset.code
+                    };
+
+                    // Enable join button
+                    document.getElementById('joinGameBtn').disabled = false;
+                });
+            });
+
+        } catch (error) {
+            console.error('Fetch games error:', error);
+            document.getElementById('gameList').innerHTML = '<p>Fehler beim Laden der Spiele.</p>';
+        }
+    }
+
+    // Create a new game
+    async function createGame() {
+        if (!selectedPackage) {
+            showError('Bitte wähle ein Quizpaket aus.');
+            return;
+        }
+
+        const playerName = document.getElementById('playerName').value.trim();
+        if (!playerName) {
+            showError('Bitte gib einen Spielernamen ein.');
+            return;
+        }
+
+        const gameType = document.getElementById('gameType').value;
+        const isSinglePlayer = gameType === 'single';
+
+        try {
+            // Create game
+            const createGameResponse = await fetch('/api/quiz/games', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    quiz_set_id: selectedPackage,
+                    is_multiplayer: !isSinglePlayer,
+                    player_count: isSinglePlayer ? 1 : 5 // Max 5 players for multiplayer
+                })
+            });
+
+            const gameData = await createGameResponse.json();
+
+            if (!gameData.success) {
+                showError(gameData.error || 'Fehler beim Erstellen des Spiels.');
+                return;
+            }
+
+            // Add player to game
+            const addPlayerResponse = await fetch(`/api/quiz/games/${gameData.game_id}/players`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    player_name: playerName,
+                    user_id: currentUser ? currentUser.id : null
+                })
+            });
+
+            const playerData = await addPlayerResponse.json();
+
+            if (!playerData.success) {
+                showError(playerData.error || 'Fehler beim Hinzufügen des Spielers.');
+                return;
+            }
+
+            // Redirect to game page
+            window.location.href = `/game.html?id=${gameData.game_id}&player=${playerData.player_id}&code=${gameData.game_code}`;
+
+        } catch (error) {
+            console.error('Create game error:', error);
+            showError('Ein Fehler ist aufgetreten. Bitte versuche es später erneut.');
+        }
+    }
+
+    // Join an existing game
+    async function joinGame(gameId, gameCode) {
+        const playerName = document.getElementById('playerName').value.trim();
+        if (!playerName) {
+            showError('Bitte gib einen Spielernamen ein.');
+            return;
+        }
+
+        try {
+            // Add player to game
+            const addPlayerResponse = await fetch(`/api/quiz/games/${gameId}/players`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    player_name: playerName,
+                    user_id: currentUser ? currentUser.id : null
+                })
+            });
+
+            const playerData = await addPlayerResponse.json();
+
+            if (!playerData.success) {
+                showError(playerData.error || 'Fehler beim Beitreten des Spiels.');
+                return;
+            }
+
+            // Redirect to game page
+            window.location.href = `/game.html?id=${gameId}&player=${playerData.player_id}&code=${gameCode}`;
+
+        } catch (error) {
+            console.error('Join game error:', error);
+            showError('Ein Fehler ist aufgetreten. Bitte versuche es später erneut.');
+        }
+    }
+
+    // Show error message
+    function showError(message) {
+        const errorElement = document.getElementById('errorMessage');
+        errorElement.textContent = message;
+        errorElement.style.display = 'block';
+
+        // Hide after 3 seconds
+        setTimeout(() => {
+            errorElement.style.display = 'none';
+        }, 3000);
+    }
+
+    // Init
+    document.addEventListener('DOMContentLoaded', () => {
+        // Check authentication
+        checkAuth();
+
+        // Fetch quiz packages
+        fetchQuizPackages();
+
+        // Fetch available games
+        fetchGames();
+
+        // Event listeners
+        document.getElementById('refreshGamesBtn').addEventListener('click', fetchGames);
+        document.getElementById('createGameBtn').addEventListener('click', createGame);
+        document.getElementById('joinGameBtn').addEventListener('click', () => {
+            if (selectedGame) {
+                joinGame(selectedGame.id, selectedGame.code);
+            }
+        });
+    });
+</script>
+</body>
+</html>
