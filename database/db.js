@@ -4,9 +4,9 @@ require('dotenv').config();
 // Create a connection pool to PostgreSQL
 const pool = new Pool({
     user: process.env.PGUSER || 'quizadmin',
-    host: process.env.PGHOST || 'localhost',
+    host: process.env.PGHOST || 'host.docker.internal', // Special Docker hostname
     database: process.env.PGDATABASE || 'network_quiz',
-    password: process.env.PGPASSWORD || 'your_secure_password',
+    password: process.env.PGPASSWORD || '170591pk',
     port: process.env.PGPORT || 5432,
 });
 

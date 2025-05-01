@@ -23,7 +23,7 @@ app.use(session({
         pool,
         tableName: 'user_sessions'
     }),
-    secret: process.env.SESSION_SECRET || 'your-secure-session-secret',
+    secret: process.env.SESSION_SECRET || '170591pk',
     resave: false,
     saveUninitialized: false,
     cookie: {
