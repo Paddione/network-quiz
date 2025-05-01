@@ -3,77 +3,402 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Netzwerk-Quiz Multiplayer</title>
+    <title>Netzwerk-Quiz</title>
     <link rel="stylesheet" href="style.css">
+    <style>
+        .quiz-selection {
+            margin-top: 20px;
+        }
+
+        .quiz-sets {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .quiz-card {
+            background: #f8f9fa;
+            border-radius: 5px;
+            padding: 15px;
+            cursor: pointer;
+            transition: all 0.3s;
+            border: 2px solid transparent;
+        }
+
+        .quiz-card:hover {
+            background: #e9ecef;
+        }
+
+        .quiz-card.selected {
+            border-color: var(--primary-color);
+            background: #e9f7fe;
+        }
+
+        .quiz-card h4 {
+            margin-top: 0;
+            margin-bottom: 10px;
+        }
+
+        .quiz-card p {
+            font-size: 14px;
+            color: #666;
+            margin: 5px 0;
+        }
+
+        .game-options {
+            margin-top: 20px;
+            display: flex;
+            gap: 15px;
+        }
+
+        .option-group {
+            margin-bottom: 15px;
+        }
+
+        .option-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+
+        .radio-group {
+            display: flex;
+            gap: 15px;
+        }
+
+        .radio-option {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .error-message {
+            color: var(--wrong-color);
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #f8d7da;
+            border-radius: 5px;
+            display: none;
+        }
+
+        .success-message {
+            color: var(--correct-color);
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #d4edda;
+            border-radius: 5px;
+            display: none;
+        }
+
+        .auth-links {
+            margin-top: 15px;
+            text-align: center;
+        }
+
+        .auth-links a {
+            color: var(--primary-color);
+            text-decoration: none;
+            margin: 0 10px;
+        }
+
+        .auth-links a:hover {
+            text-decoration: underline;
+        }
+
+        .header-links {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+        }
+
+        .user-info {
+            margin-bottom: 10px;
+            text-align: right;
+        }
+    </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Netzwerk-Quiz Multiplayer</h1>
-        
-        <!-- Login Screen -->
-        <div id="loginScreen" class="card">
-            <h2>Willkommen zum Netzwerk-Quiz!</h2>
-            <p>Teste dein Wissen über Computernetze</p>
-            <input type="text" id="playerName" placeholder="Dein Name">
-            <button onclick="joinGame()">Beitreten</button>
+<div class="container">
+    <div class="header-links">
+        <div id="userInfoContainer" class="user-info" style="display: none;">
+            <span>Angemeldet als <strong id="usernameDisplay"></strong></span>
+            <a href="/profile" class="btn">Mein Profil</a>
+            <a href="/logout" class="btn">Abmelden</a>
         </div>
 
-        <!-- Waiting Room -->
-        <div id="waitingRoom" class="card hidden">
-            <h2>Warte auf Mitspieler...</h2>
-            <div class="waiting">
-                <div id="playerList"></div>
-                <p>Das Spiel startet, sobald zwei Spieler beigetreten sind.</p>
-            </div>
-        </div>
-
-        <!-- Game Screen -->
-        <div id="gameScreen" class="hidden">
-            <div class="chapter-progress" id="chapterProgress"></div>
-            
-            <div class="card">
-                <h2 id="chapterTitle"></h2>
-                <div class="timer" id="timer">30</div>
-                
-                <div class="question">
-                    <h3 id="questionText"></h3>
-                    <div id="answerArea"></div>
-                </div>
-                
-                <div id="explanation" class="explanation hidden"></div>
-                
-                <button id="nextButton" class="hidden" onclick="nextQuestion()">Nächste Frage</button>
-            </div>
-
-            <div class="scores">
-                <div class="score-card">
-                    <h3 id="player1Name"></h3>
-                    <div id="player1Score">0</div>
-                </div>
-                <div class="score-card">
-                    <h3 id="player2Name"></h3>
-                    <div id="player2Score">0</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Chapter Result Screen -->
-        <div id="chapterResult" class="card hidden">
-            <h2 id="chapterResultTitle"></h2>
-            <div id="chapterResultContent"></div>
-            <button onclick="nextChapter()">Nächstes Kapitel</button>
-        </div>
-
-        <!-- Final Result Screen -->
-        <div id="finalResult" class="card hidden">
-            <h2>Spiel beendet!</h2>
-            <div id="finalResultContent"></div>
-            <button onclick="restartGame()">Neues Spiel</button>
+        <div id="guestLinks" class="user-info">
+            <a href="/login" class="btn">Anmelden</a>
+            <a href="/register" class="btn">Registrieren</a>
         </div>
     </div>
 
-    <script src="/socket.io/socket.io.js"></script>
-    <script src="quizData.js"></script>
-    <script src="game.js"></script>
-</body>
-</html>
+    <h1>Netzwerk-Quiz</h1>
+
+    <!-- Login Screen -->
+    <div id="loginScreen" class="card">
+        <h2>Willkommen zum Netzwerk-Quiz!</h2>
+        <p>Teste dein Wissen über Computernetze</p>
+
+        <div id="errorMessage" class="error-message"></div>
+        <div id="successMessage" class="success-message"></div>
+
+        <input type="text" id="playerName" placeholder="Dein Name">
+
+        <div class="game-options">
+            <div class="option-group">
+                <label>Spielmodus</label>
+                <div class="radio-group">
+                    <div class="radio-option">
+                        <input type="radio" id="singleplayer" name="gameMode" value="single" checked>
+                        <label for="singleplayer">Einzelspieler</label>
+                    </div>
+                    <div class="radio-option">
+                        <input type="radio" id="multiplayer" name="gameMode" value="multi">
+                        <label for="multiplayer">Mehrspieler</label>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="quiz-selection">
+            <h3>Wähle ein Quiz-Set</h3>
+            <div id="quizSets" class="quiz-sets">
+                <p>Lade Quiz-Sets...</p>
+            </div>
+        </div>
+
+        <button onclick="joinGame()" id="startButton">Spielen</button>
+    </div>
+
+    <!-- Waiting Room -->
+    <div id="waitingRoom" class="card hidden">
+        <h2>Warte auf Mitspieler...</h2>
+        <div class="waiting">
+            <div id="playerList"></div>
+            <p>Das Spiel startet, sobald mindestens zwei Spieler beigetreten sind.</p>
+            <p class="subtitle">Bis zu 5 Spieler können am Spiel teilnehmen.</p>
+        </div>
+    </div>
+
+    <!-- Game Screen -->
+    <div id="gameScreen" class="hidden">
+        <div class="chapter-progress" id="chapterProgress"></div>
+
+        <div class="card">
+            <h2 id="chapterTitle"></h2>
+            <div class="timer" id="timer">30</div>
+
+            <div class="question">
+                <h3 id="questionText"></h3>
+                <div id="questionImage" class="question-image hidden"></div>
+                <div id="answerArea"></div>
+            </div>
+
+            <div id="explanation" class="explanation hidden"></div>
+
+            <button id="nextButton" class="hidden" onclick="nextQuestion()">Nächste Frage</button>
+        </div>
+
+        <div class="scores">
+            <div id="playerScores"></div>
+        </div>
+    </div>
+
+    <!-- Chapter Result Screen -->
+    <div id="chapterResult" class="card hidden">
+        <h2 id="chapterResultTitle"></h2>
+        <div id="chapterResultContent"></div>
+        <button onclick="nextChapter()">Nächstes Kapitel</button>
+    </div>
+
+    <!-- Final Result Screen -->
+    <div id="finalResult" class="card hidden">
+        <h2>Spiel beendet!</h2>
+        <div id="finalResultContent"></div>
+        <button onclick="restartGame()">Neues Spiel</button>
+        <div class="auth-links">
+            <a href="/profile">Mein Profil ansehen</a>
+            <a href="/api/quiz/highscores">Globale Highscores</a>
+        </div>
+    </div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+    // Game State
+    let gameState = {
+        players: [],
+        playerId: null,
+        gameId: null,
+        userId: null,
+        currentPlayer: null,
+        currentQuestion: 0,
+        currentChapter: 0,
+        scores: {},
+        timer: null,
+        timeLeft: 30,
+        answered: false,
+        quizSet: null,
+        quizData: null,
+        playerAnswers: {},
+        isSinglePlayer: false
+    };
+
+    // DOM Elements
+    const loginScreen = document.getElementById('loginScreen');
+    const waitingRoom = document.getElementById('waitingRoom');
+    const gameScreen = document.getElementById('gameScreen');
+    const chapterResult = document.getElementById('chapterResult');
+    const finalResult = document.getElementById('finalResult');
+    const playerNameInput = document.getElementById('playerName');
+    const startButton = document.getElementById('startButton');
+    const playerList = document.getElementById('playerList');
+    const chapterTitle = document.getElementById('chapterTitle');
+    const questionText = document.getElementById('questionText');
+    const questionImage = document.getElementById('questionImage');
+    const answerArea = document.getElementById('answerArea');
+    const explanation = document.getElementById('explanation');
+    const nextButton = document.getElementById('nextButton');
+    const playerScores = document.getElementById('playerScores');
+    const chapterProgress = document.getElementById('chapterProgress');
+    const quizSetsContainer = document.getElementById('quizSets');
+    const errorMessage = document.getElementById('errorMessage');
+    const successMessage = document.getElementById('successMessage');
+    const userInfoContainer = document.getElementById('userInfoContainer');
+    const guestLinks = document.getElementById('guestLinks');
+    const usernameDisplay = document.getElementById('usernameDisplay');
+
+    // WebSocket connection
+    let socket;
+
+    // Initialize game
+    window.onload = function() {
+        // Check if user is logged in
+        checkAuth();
+
+        // Load quiz sets
+        loadQuizSets();
+
+        // Connect to WebSocket server
+        connectSocket();
+    };
+
+    // Check authentication status
+    async function checkAuth() {
+        try {
+            const response = await fetch('/api/check-auth');
+            const data = await response.json();
+
+            if (data.authenticated) {
+                userInfoContainer.style.display = 'block';
+                guestLinks.style.display = 'none';
+                usernameDisplay.textContent = data.username;
+                gameState.userId = data.userId;
+            } else {
+                userInfoContainer.style.display = 'none';
+                guestLinks.style.display = 'block';
+            }
+        } catch (error) {
+            console.error('Auth check error:', error);
+        }
+    }
+
+    // Load available quiz sets
+    async function loadQuizSets() {
+        try {
+            const response = await fetch('/api/quiz/sets');
+            const quizSets = await response.json();
+
+            quizSetsContainer.innerHTML = '';
+
+            if (quizSets.length > 0) {
+                quizSets.forEach(quiz => {
+                    const quizCard = document.createElement('div');
+                    quizCard.className = 'quiz-card';
+                    quizCard.dataset.id = quiz.id;
+                    quizCard.innerHTML = `
+                            <h4>${quiz.title}</h4>
+                            <p>${quiz.description || 'Keine Beschreibung verfügbar'}</p>
+                            <p>Kapitel: ${quiz.chapters_count}</p>
+                            <p>Fragen: ${quiz.questions_count}</p>
+                        `;
+
+                    quizCard.addEventListener('click', () => {
+                        document.querySelectorAll('.quiz-card').forEach(card => {
+                            card.classList.remove('selected');
+                        });
+                        quizCard.classList.add('selected');
+                        gameState.quizSet = quiz.id;
+                    });
+
+                    quizSetsContainer.appendChild(quizCard);
+                });
+
+                // Select first quiz set by default
+                if (quizSets.length > 0) {
+                    const firstQuizCard = document.querySelector('.quiz-card');
+                    firstQuizCard.classList.add('selected');
+                    gameState.quizSet = quizSets[0].id;
+                }
+            } else {
+                quizSetsContainer.innerHTML = '<p>Keine Quiz-Sets verfügbar.</p>';
+            }
+        } catch (error) {
+            console.error('Quiz sets fetch error:', error);
+            quizSetsContainer.innerHTML = '<p>Fehler beim Laden der Quiz-Sets.</p>';
+        }
+    }
+
+    // Connect to socket.io server
+    function connectSocket() {
+        // Connect to WebSocket server
+        socket = io();
+
+        // Add console logging for debugging
+        console.log("Game initialized, connecting to server...");
+
+        // Socket event handlers
+        socket.on('connect', () => {
+            console.log('Connected to server');
+        });
+
+        socket.on('playerJoined', (data) => {
+            console.log('Player joined event received:', data);
+            gameState.players = data.players;
+            gameState.scores = data.scores;
+            gameState.playerId = data.playerId || null;
+            gameState.gameId = data.gameId || null;
+
+            updatePlayerList();
+
+            if (gameState.players.length >= 2) {
+                console.log('Multiple players joined, ready to start game');
+                document.querySelector('#waitingRoom p').textContent = 'Klicke auf "Spiel starten", wenn alle Spieler beigetreten sind.';
+                const startBtn = document.createElement('button');
+                startBtn.textContent = 'Spiel starten';
+                startBtn.onclick = () => socket.emit('startGame');
+                waitingRoom.appendChild(startBtn);
+            }
+        });
+
+        socket.on('gameStarted', (data) => {
+            console.log('Game started event received:', data);
+            waitingRoom.classList.add('hidden');
+            gameScreen.classList.remove('hidden');
+            gameState.players = data.players;
+            gameState.scores = data.scores;
+            gameState.quizData = data.quiz;
+
+            setupGame();
+            showQuestion();
+        });
+
+        socket.on('answer', (data) => {
+            console.log('Answer event received:', data);
+            if (data.player !== gameState.currentPlayer) {
+                showOtherPlayerAnswer(data);
+            }
+        });
+
+        socket.on('nextQuestion', () => {

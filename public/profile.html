@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mein Profil - Netzwerk-Quiz</title>
+    <link rel="stylesheet" href="/style.css">
+    <style>
+        .profile-container {
+            max-width: 800px;
+            margin: 50px auto;
+        }
+
+        .profile-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+
+        .profile-header h2 {
+            margin: 0;
+        }
+
+        .profile-section {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        .profile-section h3 {
+            margin-top: 0;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .profile-details {
+            margin-bottom: 20px;
+        }
+
+        .profile-details p {
+            margin: 5px 0;
+        }
+
+        .profile-details label {
+            font-weight: bold;
+            width: 120px;
+            display: inline-block;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        table th, table td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+
+        table th {
+            font-weight: bold;
+            color: #7f8c8d;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 300px;
+            margin-top: 20px;
+        }
+
+        .error-message, .success-message {
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .error-message {
+            background-color: #f8d7da;
+            color: var(--wrong-color);
+        }
+
+        .success-message {
+            background-color: #d4edda;
+            color: var(--correct-color);
+        }
+
+        .password-change-form {
+            display: none;
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+
+        .nav-links {
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+        }
+
+        .nav-links a {
+            color: var(--primary-color);
+            text-decoration: none;
+        }
+
+        .nav-links a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="profile-container">
+        <div class="profile-header">
+            <h2>Mein Profil</h2>
+            <div>
+                <a href="/" class="btn">Zum Spiel</a>
+                <a href="/logout" class="btn">Abmelden</a>
+            </div>
+        </div>
+
+        <div id="errorMessage" class="error-message"></div>
+        <div id="successMessage" class="success-message"></div>
+
+        <div class="profile-section">
+            <h3>Benutzerdaten</h3>
+            <div class="profile-details">
+                <p><label>Benutzername:</label> <span id="username"></span></p>
+                <p><label>E-Mail:</label> <span id="email"></span></p>
+                <p><label>Registriert seit:</label> <span id="createdAt"></span></p>
+            </div>
+
+            <button id="showPasswordChangeBtn" class="btn">Passwort ändern</button>
+
+            <div id="passwordChangeForm" class="password-change-form">
+                <h4>Passwort ändern</h4>
+                <form id="changePasswordForm">
+                    <div class="form-group">
+                        <label for="currentPassword">Aktuelles Passwort</label>
+                        <input type="password" id="currentPassword" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="newPassword">Neues Passwort</label>
+                        <input type="password" id="newPassword" required minlength="6">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="confirmPassword">Passwort bestätigen</label>
+                        <input type="password" id="confirmPassword" required minlength="6">
+                    </div>
+
+                    <button type="submit" class="btn">Passwort ändern</button>
+                    <button type="button" id="cancelPasswordChangeBtn" class="btn">Abbrechen</button>
+                </form>
+            </div>
+        </div>
+
+        <div class="profile-section">
+            <h3>Meine Highscores</h3>
+            <table id="highscoresTable">
+                <thead>
+                <tr>
+                    <th>Quiz</th>
+                    <th>Punkte</th>
+                    <th>Datum</th>
+                    <th>Modus</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr>
+                    <td colspan="4">Lade Daten...</td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="profile-section">
+            <h3>Fortschritt-Verlauf</h3>
+            <p>Deine Punktzahl im Laufe der Zeit:</p>
+            <div class="chart-container">
+                <canvas id="scoreChart"></canvas>
+            </div>
+        </div>
+
+        <div class="nav-links">
+            <a href="/">Zurück zur Startseite</a>
+            <a href="/api/quiz/highscores">Globale Highscores</a>
+            <a href="/logout">Abmelden</a>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // DOM elements
+    const usernameSpan = document.getElementById('username');
+    const emailSpan = document.getElementById('email');
+    const createdAtSpan = document.getElementById('createdAt');
+    const highscoresTable = document.getElementById('highscoresTable').getElementsByTagName('tbody')[0];
+    const scoreChartCanvas = document.getElementById('scoreChart');
+    const errorMessage = document.getElementById('errorMessage');
+    const successMessage = document.getElementById('successMessage');
+    const showPasswordChangeBtn = document.getElementById('showPasswordChangeBtn');
+    const passwordChangeForm = document.getElementById('passwordChangeForm');
+    const changePasswordForm = document.getElementById('changePasswordForm');
+    const cancelPasswordChangeBtn = document.getElementById('cancelPasswordChangeBtn');
+
+    // Chart instance
+    let scoreChart;
+
+    // Check if user is authenticated
+    async function checkAuth() {
+        try {
+            const response = await fetch('/api/check-auth');
+            const data = await response.json();
+
+            if (!data.authenticated) {
+                window.location.href = '/login?error=access_denied';
+                return false;
+            }
+
+            return true;
+        } catch (error) {
+            console.error('Auth check error:', error);
+            window.location.href = '/login?error=access_denied';
+            return false;
+        }
+    }
+
+    // Load user data
+    async function loadUserData() {
+        try {
+            const response = await fetch('/api/user');
+            const user = await response.json();
+
+            usernameSpan.textContent = user.username;
+            emailSpan.textContent = user.email;
+
+            // Load highscores
+            await loadHighscores();
+
+            // Load score history
+            await loadScoreHistory();
+
+        } catch (error) {
+            console.error('User data fetch error:', error);
+            errorMessage.textContent = 'Fehler beim Laden der Benutzerdaten.';
+            errorMessage.style.display = 'block';
+        }
+    }
+
+    // Load highscores
+    async function loadHighscores() {
+        try {
+            const response = await fetch('/api/user/highscores');
+            const highscores = await response.json();
+
+            highscoresTable.innerHTML = '';
+
+            if (highscores.length > 0) {
+                highscores.forEach(score => {
+                    const row = document.createElement('tr');
+
+                    const quizCell = document.createElement('td');
+                    quizCell.textContent = score.quiz_title;
+
+                    const scoreCell = document.createElement('td');
+                    scoreCell.textContent = score.score;
+
+                    const dateCell = document.createElement('td');
+                    dateCell.textContent = new Date(score.started_at).toLocaleString('de-DE');
+
+                    const modeCell = document.createElement('td');
+                    modeCell.textContent = score.is_multiplayer ? `Mehrspieler (${score.player_count})` : 'Einzelspieler';
+
+                    row.appendChild(quizCell);
+                    row.appendChild(scoreCell);
+                    row.appendChild(dateCell);
+                    row.appendChild(modeCell);
+
+                    highscoresTable.appendChild(row);
+                });
+            } else {
+                const row = document.createElement('tr');
+                const cell = document.createElement('td');
+                cell.setAttribute('colspan', '4');
+                cell.textContent = 'Keine Highscores gefunden. Spiele ein Quiz, um deinen ersten Highscore zu erzielen!';
+                row.appendChild(cell);
+                highscoresTable.appendChild(row);
+            }
+        } catch (error) {
+            console.error('Highscores fetch error:', error);
+            errorMessage.textContent = 'Fehler beim Laden der Highscores.';
+            errorMessage.style.display = 'block';
+        }
+    }
+
+    // Load score history
+    async function loadScoreHistory() {
+        try {
+            const response = await fetch('/api/quiz/highscore-history');
+            const history = await response.json();
+
+            if (history.length > 0) {
+                // Process data for chart
+                const labels = history.map(item => new Date(item.started_at).toLocaleDateString('de-DE'));
+                const scores = history.map(item => item.score);
+                const quizNames = history.map(item => item.quiz_name);
+
+                // Create chart
+                scoreChart = new Chart(scoreChartCanvas, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'Punkte',
+                            data: scores,
+                            backgroundColor: 'rgba(52, 152, 219, 0.2)',
+                            borderColor: 'rgba(52, 152, 219, 1)',
+                            borderWidth: 2,
+                            pointBackgroundColor: 'rgba(52, 152, 219, 1)',
+                            pointRadius: 4,
+                            tension: 0.1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                title: {
+                                    display: true,
+                                    text: 'Punkte'
+                                }
+                            },
+                            x: {
+                                title: {
+                                    display: true,
+                                    text: 'Datum'
+                                }
+                            }
+                        },
+                        plugins: {
+                            tooltip: {
+                                callbacks: {
+                                    title: function(tooltipItems) {
+                                        return quizNames[tooltipItems[0].dataIndex];
+                                    },
+                                    label: function(context) {
+                                        return `Punkte: ${context.parsed.y}`;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            } else {
+                // No data available
+                document.querySelector('.chart-container').innerHTML = '<p>Keine Daten verfügbar. Spiele ein Quiz, um deinen Fortschritt zu sehen!</p>';
+            }
+        } catch (error) {
+            console.error('Score history fetch error:', error);
+            document.querySelector('.chart-container').innerHTML = '<p>Fehler beim Laden des Fortschritts.</p>';
+        }
+    }
+
+    // Change password
+    async function changePassword(event) {
+        event.preventDefault();
+
+        errorMessage.style.display = 'none';
+        successMessage.style.display = 'none';
+
+        const currentPassword = document.getElementById('currentPassword').value;
+        const newPassword = document.getElementById('newPassword').value;
+        const confirmPassword = document.getElementById('confirmPassword').value;
+
+        // Client-side validation
+        if (newPassword !== confirmPassword) {
+            errorMessage.textContent = 'Die Passwörter stimmen nicht überein.';
+            errorMessage.style.display = 'block';
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/change-password', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    current_password: currentPassword,
+                    new_password: newPassword,
+                    confirm_password: confirmPassword
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.error) {
+                errorMessage.textContent = data.error;
+                errorMessage.style.display = 'block';
+            } else {
+                successMessage.textContent = data.message || 'Passwort erfolgreich geändert!';
+                successMessage.style.display = 'block';
+
+                // Reset form and hide it
+                changePasswordForm.reset();
+                passwordChangeForm.style.display = 'none';
+            }
+        } catch (error) {
+            console.error('Password change error:', error);
+            errorMessage.textContent = 'Ein Fehler ist aufgetreten. Bitte versuche es später erneut.';
+            errorMessage.style.display = 'block';
+        }
+    }
+
+    // Event listeners
+    showPasswordChangeBtn.addEventListener('click', function() {
+        passwordChangeForm.style.display = 'block';
+        this.style.display = 'none';
+    });
+
+    cancelPasswordChangeBtn.addEventListener('click', function() {
+        passwordChangeForm.style.display = 'none';
+        showPasswordChangeBtn.style.display = 'block';
+        changePasswordForm.reset();
+    });
+
+    changePasswordForm.addEventListener('submit', changePassword);
+
+    // Initialize page
+    async function init() {
+        const isAuthorized = await checkAuth();
+
+        if (isAuthorized) {
+            await loadUserData();
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>

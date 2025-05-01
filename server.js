@@ -3,9 +3,43 @@ const app = express();
 const http = require('http').createServer(app);
 const io = require('socket.io')(http);
 const path = require('path');
+const session = require('express-session');
+const pgSession = require('connect-pg-simple')(session);
+const { pool } = require('./database/db');
+const dotenv = require('dotenv');
 
-// Serve static files
+// Load environment variables
+dotenv.config();
+
+// Middleware
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// Session setup
+app.use(session({
+    store: new pgSession({
+        pool,
+        tableName: 'user_sessions'
+    }),
+    secret: process.env.SESSION_SECRET || 'your-secure-session-secret',
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+        maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days
+    }
+}));
+
+// Import routes
+const authRoutes = require('./routes/auth').router;
+const adminRoutes = require('./routes/admin');
+const quizRoutes = require('./routes/quiz');
+
+// Use routes
+app.use('/', authRoutes);
+app.use('/admin', adminRoutes);
+app.use('/api/quiz', quizRoutes);
 
 // Game state
 let games = {};
@@ -14,18 +48,18 @@ let waitingPlayers = [];
 // Handle socket connections
 io.on('connection', (socket) => {
     console.log('User connected:', socket.id);
-    
+
     socket.on('join', (data) => {
         handleJoin(socket, data);
     });
-    
+
     socket.on('startGame', () => {
         const game = findGameForPlayer(socket.id);
-        if (game && game.players.length === 2) {
+        if (game && game.players.length >= 2 && game.players.length <= 5) {
             startGame(game);
         }
     });
-    
+
     socket.on('answer', (data) => {
         const game = findGameForPlayer(socket.id);
         if (game) {
@@ -33,9 +67,14 @@ io.on('connection', (socket) => {
             game.sockets.forEach(s => {
                 s.emit('answer', data);
             });
+
+            // Save answer to database if user is logged in
+            if (data.playerId) {
+                savePlayerAnswer(data);
+            }
         }
     });
-    
+
     socket.on('nextQuestion', () => {
         const game = findGameForPlayer(socket.id);
         if (game) {
@@ -44,7 +83,7 @@ io.on('connection', (socket) => {
             });
         }
     });
-    
+
     socket.on('nextChapter', () => {
         const game = findGameForPlayer(socket.id);
         if (game) {
@@ -53,86 +92,363 @@ io.on('connection', (socket) => {
             });
         }
     });
-    
+
+    socket.on('gameEnd', (data) => {
+        const game = findGameForPlayer(socket.id);
+        if (game) {
+            // Save game results to database
+            saveGameResults(game.dbId, data.scores);
+
+            // Notify all players
+            game.sockets.forEach(s => {
+                s.emit('gameEnded', data);
+            });
+        }
+    });
+
     socket.on('disconnect', () => {
         handleDisconnect(socket);
     });
 });
 
+// DB function to save player answer
+async function savePlayerAnswer(data) {
+    try {
+        const { playerId, questionId, answer, isCorrect, timeLeft } = data;
+
+        // Convert timeLeft to response time (milliseconds)
+        const responseTimeMs = Math.max(0, (30 - timeLeft) * 1000);
+
+        // Get option ID
+        const optionsResult = await pool.query(
+            'SELECT id FROM options WHERE question_id = $1 ORDER BY sequence_number LIMIT 1 OFFSET $2',
+            [questionId, answer]
+        );
+
+        const optionId = optionsResult.rows.length > 0 ? optionsResult.rows[0].id : null;
+
+        await pool.query(
+            'INSERT INTO player_answers (game_player_id, question_id, option_id, is_correct, response_time_ms) VALUES ($1, $2, $3, $4, $5)',
+            [playerId, questionId, optionId, isCorrect, responseTimeMs]
+        );
+    } catch (error) {
+        console.error('Error saving player answer:', error);
+    }
+}
+
+// Save game results to database
+async function saveGameResults(gameId, scores) {
+    try {
+        // Update game end time
+        await pool.query('UPDATE games SET ended_at = NOW() WHERE id = $1', [gameId]);
+
+        // Update player scores
+        for (const [playerName, score] of Object.entries(scores)) {
+            await pool.query(
+                'UPDATE game_players SET score = $1 WHERE game_id = $2 AND player_name = $3',
+                [score, gameId, playerName]
+            );
+        }
+
+        // Set winner(s)
+        await pool.query(`
+            UPDATE game_players
+            SET is_winner = true
+            WHERE id IN (
+                SELECT id
+                FROM game_players
+                WHERE game_id = $1
+                ORDER BY score DESC
+                LIMIT 1
+            )
+        `, [gameId]);
+    } catch (error) {
+        console.error('Error saving game results:', error);
+    }
+}
+
 function handleJoin(socket, data) {
     const playerName = data.player;
-    
-    // Add player to waiting list
-    waitingPlayers.push({
-        socket: socket,
-        name: playerName
-    });
-    
-    // If we have 2 players, create a game
-    if (waitingPlayers.length >= 2) {
-        const player1 = waitingPlayers.shift();
-        const player2 = waitingPlayers.shift();
-        
+    const userId = data.userId; // May be null for non-authenticated users
+    const isSinglePlayer = data.singlePlayer === true;
+
+    if (isSinglePlayer) {
+        // Create a single-player game
+        createSinglePlayerGame(socket, playerName, userId);
+    } else {
+        // Add player to waiting list for multiplayer
+        waitingPlayers.push({
+            socket: socket,
+            name: playerName,
+            userId: userId
+        });
+
+        // If we have at least 2 players (up to 5), create a game
+        if (waitingPlayers.length >= 2) {
+            createMultiPlayerGame();
+        } else {
+            // Notify waiting player
+            socket.emit('playerJoined', {
+                players: [playerName],
+                scores: { [playerName]: 0 }
+            });
+        }
+    }
+}
+
+async function createSinglePlayerGame(socket, playerName, userId) {
+    try {
+        // Get a random quiz set
+        const quizResult = await pool.query('SELECT id FROM quiz_sets WHERE is_active = TRUE ORDER BY RANDOM() LIMIT 1');
+
+        if (quizResult.rows.length === 0) {
+            socket.emit('error', { message: 'No quiz sets available' });
+            return;
+        }
+
+        const quizSetId = quizResult.rows[0].id;
         const gameId = generateGameId();
+
+        // Create game in database
+        const gameResult = await pool.query(
+            'INSERT INTO games (quiz_set_id, is_multiplayer, game_code, player_count) VALUES ($1, $2, $3, $4) RETURNING id',
+            [quizSetId, false, gameId, 1]
+        );
+
+        const dbGameId = gameResult.rows[0].id;
+
+        // Create player in database
+        const playerResult = await pool.query(
+            'INSERT INTO game_players (game_id, user_id, player_name, score) VALUES ($1, $2, $3, $4) RETURNING id',
+            [dbGameId, userId, playerName, 0]
+        );
+
+        const playerId = playerResult.rows[0].id;
+
+        // Create game in memory
         games[gameId] = {
             id: gameId,
-            players: [player1.name, player2.name],
-            sockets: [player1.socket, player2.socket],
+            dbId: dbGameId,
+            quizSetId: quizSetId,
+            players: [playerName],
+            playerIds: [playerId],
+            sockets: [socket],
             scores: {
-                [player1.name]: 0,
-                [player2.name]: 0
-            }
+                [playerName]: 0
+            },
+            isSinglePlayer: true
         };
-        
+
         // Add game ID to socket data
-        player1.socket.gameId = gameId;
-        player2.socket.gameId = gameId;
-        
-        // Notify both players
-        const gameData = {
-            players: games[gameId].players,
-            scores: games[gameId].scores
-        };
-        
-        games[gameId].sockets.forEach(s => {
-            s.emit('playerJoined', gameData);
-        });
-    } else {
-        // Notify waiting player
+        socket.gameId = gameId;
+
+        // Notify player
         socket.emit('playerJoined', {
             players: [playerName],
-            scores: { [playerName]: 0 }
+            scores: { [playerName]: 0 },
+            playerId: playerId,
+            gameId: dbGameId
+        });
+
+        // Start the game immediately for single player
+        startGame(games[gameId]);
+
+    } catch (error) {
+        console.error('Error creating single player game:', error);
+        socket.emit('error', { message: 'Failed to create game' });
+    }
+}
+
+async function createMultiPlayerGame() {
+    try {
+        // Take players from waiting list (up to 5)
+        const gamePlayers = waitingPlayers.splice(0, 5);
+
+        // Get a random quiz set
+        const quizResult = await pool.query('SELECT id FROM quiz_sets WHERE is_active = TRUE ORDER BY RANDOM() LIMIT 1');
+
+        if (quizResult.rows.length === 0) {
+            gamePlayers.forEach(p => p.socket.emit('error', { message: 'No quiz sets available' }));
+            return;
+        }
+
+        const quizSetId = quizResult.rows[0].id;
+        const gameId = generateGameId();
+
+        // Create game in database
+        const gameResult = await pool.query(
+            'INSERT INTO games (quiz_set_id, is_multiplayer, game_code, player_count) VALUES ($1, $2, $3, $4) RETURNING id',
+            [quizSetId, true, gameId, gamePlayers.length]
+        );
+
+        const dbGameId = gameResult.rows[0].id;
+
+        // Setup game object
+        const playerNames = gamePlayers.map(p => p.name);
+        const playerSockets = gamePlayers.map(p => p.socket);
+        const playerScores = {};
+        playerNames.forEach(name => playerScores[name] = 0);
+
+        const playerIds = [];
+
+        // Create players in database
+        for (const player of gamePlayers) {
+            const playerResult = await pool.query(
+                'INSERT INTO game_players (game_id, user_id, player_name, score) VALUES ($1, $2, $3, $4) RETURNING id',
+                [dbGameId, player.userId, player.name, 0]
+            );
+
+            playerIds.push(playerResult.rows[0].id);
+        }
+
+        // Create game in memory
+        games[gameId] = {
+            id: gameId,
+            dbId: dbGameId,
+            quizSetId: quizSetId,
+            players: playerNames,
+            playerIds: playerIds,
+            sockets: playerSockets,
+            scores: playerScores,
+            isSinglePlayer: false
+        };
+
+        // Add game ID to socket data
+        for (let i = 0; i < playerSockets.length; i++) {
+            playerSockets[i].gameId = gameId;
+        }
+
+        // Notify all players
+        const gameData = {
+            players: playerNames,
+            scores: playerScores
+        };
+
+        for (let i = 0; i < playerSockets.length; i++) {
+            playerSockets[i].emit('playerJoined', {
+                ...gameData,
+                playerId: playerIds[i],
+                gameId: dbGameId
+            });
+        }
+
+    } catch (error) {
+        console.error('Error creating multiplayer game:', error);
+    }
+}
+
+async function startGame(game) {
+    try {
+        const gameData = {
+            players: game.players,
+            scores: game.scores,
+            gameId: game.dbId,
+            quizSetId: game.quizSetId
+        };
+
+        // Fetch quiz data from database
+        const quizData = await getQuizData(game.quizSetId);
+
+        game.sockets.forEach(s => {
+            s.emit('gameStarted', {
+                ...gameData,
+                quiz: quizData
+            });
+        });
+    } catch (error) {
+        console.error('Error starting game:', error);
+        game.sockets.forEach(s => {
+            s.emit('error', { message: 'Failed to start game' });
         });
     }
 }
 
-function startGame(game) {
-    const gameData = {
-        players: game.players,
-        scores: game.scores
-    };
-    
-    game.sockets.forEach(s => {
-        s.emit('gameStarted', gameData);
-    });
+async function getQuizData(quizSetId) {
+    // Fetch complete quiz data from database
+    const quizSetResult = await pool.query('SELECT * FROM quiz_sets WHERE id = $1', [quizSetId]);
+
+    if (quizSetResult.rows.length === 0) {
+        throw new Error('Quiz set not found');
+    }
+
+    const quizSet = quizSetResult.rows[0];
+
+    // Get chapters
+    const chaptersResult = await pool.query(
+        'SELECT * FROM chapters WHERE quiz_set_id = $1 ORDER BY sequence_number',
+        [quizSetId]
+    );
+
+    quizSet.chapters = [];
+
+    for (const chapter of chaptersResult.rows) {
+        const chapterObj = {
+            id: chapter.id,
+            title: chapter.title,
+            questions: []
+        };
+
+        // Get questions
+        const questionsResult = await pool.query(
+            'SELECT * FROM questions WHERE chapter_id = $1 ORDER BY sequence_number',
+            [chapter.id]
+        );
+
+        for (const question of questionsResult.rows) {
+            const questionObj = {
+                id: question.id,
+                question: question.question_text,
+                explanation: question.explanation,
+                type: question.type,
+                has_image: question.has_image,
+                image_path: question.has_image ? `/uploads/${question.image_path}` : null,
+                options: []
+            };
+
+            // Get options
+            const optionsResult = await pool.query(
+                'SELECT * FROM options WHERE question_id = $1 ORDER BY sequence_number',
+                [question.id]
+            );
+
+            questionObj.options = optionsResult.rows.map(opt => opt.option_text);
+
+            // Find correct option
+            const correctOption = optionsResult.rows.findIndex(opt => opt.is_correct);
+            questionObj.correct = correctOption !== -1 ? correctOption : 0;
+
+            chapterObj.questions.push(questionObj);
+        }
+
+        quizSet.chapters.push(chapterObj);
+    }
+
+    return quizSet;
 }
 
 function handleDisconnect(socket) {
     console.log('User disconnected:', socket.id);
-    
+
     // Remove from waiting players
     waitingPlayers = waitingPlayers.filter(p => p.socket.id !== socket.id);
-    
+
     // Check if player was in a game
     const game = findGameForPlayer(socket.id);
     if (game) {
-        // Notify other player
+        // Notify other players
         game.sockets.forEach(s => {
             if (s.id !== socket.id) {
                 s.emit('playerLeft', { player: getPlayerName(game, socket.id) });
             }
         });
-        
+
+        // Update game end time in database
+        try {
+            pool.query('UPDATE games SET ended_at = NOW() WHERE id = $1', [game.dbId]);
+        } catch (error) {
+            console.error('Error updating game end time:', error);
+        }
+
         // Remove game
         delete games[game.id];
     }
