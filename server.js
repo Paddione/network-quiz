@@ -40,10 +40,16 @@ const quizRoutes = require('./routes/quiz');
 app.use('/', authRoutes);
 app.use('/admin', adminRoutes);
 app.use('/api/quiz', quizRoutes);
-// Get active games
-router.get('/api/games/active', async (req, res) => {
+
+// Add this after your route declarations but before the socket.io logic
+app.get('/lobby', (req, res) => {
+    res.sendFile('lobby.html', { root: './public' });
+});
+
+// Add the active games endpoint
+app.get('/api/games/active', async (req, res) => {
     try {
-        const result = await db.query(
+        const result = await pool.query(
             `SELECT 
                 g.id, 
                 g.game_code, 

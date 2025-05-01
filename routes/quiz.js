@@ -7,18 +7,18 @@ const { isAuthenticated } = require('./auth');
 router.get('/sets', async (req, res) => {
     try {
         const result = await db.query(
-            `SELECT 
-        id, 
-        title, 
-        description,
-        (SELECT COUNT(*) FROM chapters WHERE quiz_set_id = quiz_sets.id) AS chapters_count,
-        (SELECT COUNT(*) FROM chapters c JOIN questions q ON c.id = q.chapter_id WHERE c.quiz_set_id = quiz_sets.id) AS questions_count
-      FROM 
-        quiz_sets
-      WHERE 
-        is_active = TRUE
-      ORDER BY 
-        created_at DESC`
+            `SELECT
+                 id,
+                 title,
+                 description,
+                 (SELECT COUNT(*) FROM chapters WHERE quiz_set_id = quiz_sets.id) AS chapters_count,
+                 (SELECT COUNT(*) FROM chapters c JOIN questions q ON c.id = q.chapter_id WHERE c.quiz_set_id = quiz_sets.id) AS questions_count
+             FROM
+                 quiz_sets
+             WHERE
+                 is_active = TRUE
+             ORDER BY
+                 created_at DESC`
         );
 
         res.json(result.rows);
@@ -66,6 +66,38 @@ router.get('/sets/:id', async (req, res) => {
 
     } catch (error) {
         console.error('Quiz set details fetch error:', error);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// Get active games
+router.get('/games/active', async (req, res) => {
+    try {
+        const result = await db.query(
+            `SELECT 
+                g.id, 
+                g.game_code, 
+                g.is_multiplayer,
+                g.player_count,
+                CASE WHEN g.is_multiplayer THEN 5 ELSE 1 END AS max_players,
+                qs.title AS quiz_title
+            FROM 
+                games g
+            JOIN 
+                quiz_sets qs ON g.quiz_set_id = qs.id
+            WHERE 
+                g.ended_at IS NULL
+                AND g.started_at > NOW() - INTERVAL '30 minutes'
+                AND (NOT g.is_multiplayer OR g.player_count < 5)
+            ORDER BY 
+                g.started_at DESC
+            LIMIT 20`
+        );
+
+        res.json(result.rows);
+
+    } catch (error) {
+        console.error('Active games fetch error:', error);
         res.status(500).json({ error: 'Server error' });
     }
 });
@@ -219,16 +251,16 @@ router.post('/games/:id/end', async (req, res) => {
 
         // Set winner(s)
         await db.query(`
-      UPDATE game_players
-      SET is_winner = true
-      WHERE id IN (
-        SELECT id
-        FROM game_players
-        WHERE game_id = $1
-        ORDER BY score DESC
-        LIMIT 1
-      )
-    `, [gameId]);
+            UPDATE game_players
+            SET is_winner = true
+            WHERE id IN (
+                SELECT id
+                FROM game_players
+                WHERE game_id = $1
+                ORDER BY score DESC
+                LIMIT 1
+                )
+        `, [gameId]);
 
         res.json({ success: true });
 
@@ -260,22 +292,22 @@ router.post('/answers', async (req, res) => {
 router.get('/highscores', async (req, res) => {
     try {
         const result = await db.query(
-            `SELECT 
-        gp.player_name,
-        gp.score,
-        qs.title AS quiz_title,
-        g.started_at,
-        g.is_multiplayer,
-        g.player_count
-      FROM 
-        game_players gp
-      JOIN games g ON gp.game_id = g.id
-      JOIN quiz_sets qs ON g.quiz_set_id = qs.id
-      WHERE 
-        g.ended_at IS NOT NULL
-      ORDER BY 
-        gp.score DESC, g.started_at DESC
-      LIMIT 50`
+            `SELECT
+                 gp.player_name,
+                 gp.score,
+                 qs.title AS quiz_title,
+                 g.started_at,
+                 g.is_multiplayer,
+                 g.player_count
+             FROM
+                 game_players gp
+                     JOIN games g ON gp.game_id = g.id
+                     JOIN quiz_sets qs ON g.quiz_set_id = qs.id
+             WHERE
+                 g.ended_at IS NOT NULL
+             ORDER BY
+                 gp.score DESC, g.started_at DESC
+                 LIMIT 50`
         );
 
         res.json(result.rows);
@@ -292,21 +324,21 @@ router.get('/personal-highscores', isAuthenticated, async (req, res) => {
         const userId = req.session.user.id;
 
         const result = await db.query(
-            `SELECT 
-        gp.score,
-        qs.title AS quiz_title,
-        g.started_at,
-        g.is_multiplayer,
-        g.player_count
-      FROM 
-        game_players gp
-      JOIN games g ON gp.game_id = g.id
-      JOIN quiz_sets qs ON g.quiz_set_id = qs.id
-      WHERE 
-        gp.user_id = $1 AND g.ended_at IS NOT NULL
-      ORDER BY 
-        gp.score DESC, g.started_at DESC
-      LIMIT 10`,
+            `SELECT
+                 gp.score,
+                 qs.title AS quiz_title,
+                 g.started_at,
+                 g.is_multiplayer,
+                 g.player_count
+             FROM
+                 game_players gp
+                     JOIN games g ON gp.game_id = g.id
+                     JOIN quiz_sets qs ON g.quiz_set_id = qs.id
+             WHERE
+                 gp.user_id = $1 AND g.ended_at IS NOT NULL
+             ORDER BY
+                 gp.score DESC, g.started_at DESC
+                 LIMIT 10`,
             [userId]
         );
 
@@ -324,19 +356,19 @@ router.get('/highscore-history', isAuthenticated, async (req, res) => {
         const userId = req.session.user.id;
 
         const result = await db.query(
-            `SELECT 
-        gp.score,
-        g.started_at,
-        qs.title AS quiz_name
-      FROM 
-        game_players gp
-      JOIN games g ON gp.game_id = g.id
-      JOIN quiz_sets qs ON g.quiz_set_id = qs.id
-      WHERE 
-        gp.user_id = $1 AND g.ended_at IS NOT NULL
-      ORDER BY 
-        g.started_at ASC
-      LIMIT 100`,
+            `SELECT
+                 gp.score,
+                 g.started_at,
+                 qs.title AS quiz_name
+             FROM
+                 game_players gp
+                     JOIN games g ON gp.game_id = g.id
+                     JOIN quiz_sets qs ON g.quiz_set_id = qs.id
+             WHERE
+                 gp.user_id = $1 AND g.ended_at IS NOT NULL
+             ORDER BY
+                 g.started_at ASC
+                 LIMIT 100`,
             [userId]
         );
 
