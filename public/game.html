@@ -79,7 +79,7 @@
                 <h4>Erklärung:</h4>
                 <p id="explanationText"></p>
             </div>
-            <button id="nextButton" class="hidden">Nächste Frage</button>
+            <button id="nextButton" class="hidden" onclick="game.handleNextQuestion()">Nächste Frage</button>
         </div>
     </div>
 
@@ -127,7 +127,9 @@
                     timeLeft: 30,
                     answered: false,
                     quizData: null,
-                    playerAnswers: {}
+                    playerAnswers: {},
+                    playerId: null,
+                    gameId: null
                 };
                 this.socket = null;
                 this.initialize();
@@ -174,6 +176,8 @@
                     });
 
                     this.socket.on('answer', (data) => {
+                        alert('Received answer event: ' + JSON.stringify(data));
+                        log('Answer received from server', data);
                         this.handleAnswer(data);
                     });
 
@@ -228,6 +232,8 @@
                 this.state.scores = data.scores;
                 this.state.currentChapter = 0;
                 this.state.currentQuestion = 0;
+                this.state.playerId = data.playerId;
+                this.state.gameId = data.gameId;
                 
                 log('Game state updated', this.state);
                 
@@ -324,14 +330,21 @@
             submitAnswer(index) {
                 if (this.state.answered) return; // Prevent multiple answers
                 
-                log('Submitting answer', { index });
-                
-                this.socket.emit('submitAnswer', {
-                    questionIndex: this.state.currentQuestion,
-                    chapterIndex: this.state.currentChapter,
+                const chapter = this.state.quizData.chapters[this.state.currentChapter];
+                const question = chapter.questions[this.state.currentQuestion];
+
+                const payload = {
+                    gameId: this.state.gameId,
+                    playerId: this.state.playerId,
+                    questionId: question.id,
                     answer: index,
+                    isCorrect: (index === question.correct),
                     timeLeft: this.state.timeLeft
-                });
+                };
+
+                log('Submitting answer', payload);
+
+                this.socket.emit('answer', payload);
             }
 
             startTimer() {
@@ -448,39 +461,18 @@
             }
 
             handleAnswer(data) {
+                log('Answer received from server', data);
+
+                // Mark as answered
                 this.state.answered = true;
-                this.stopTimer();
-                
-                // Show correct/wrong answer
-                const options = document.querySelectorAll('.option');
-                const correctOption = this.state.quizData.chapters[this.state.currentChapter]
-                    .questions[this.state.currentQuestion].correct;
-                
-                options.forEach((option, index) => {
-                    if (index === correctOption) {
-                        option.classList.add('correct');
-                    } else if (index === data.answer && index !== correctOption) {
-                        option.classList.add('wrong');
-                    }
-                });
-                
-                // Show explanation
-                const explanation = document.getElementById('explanation');
-                const explanationText = document.getElementById('explanationText');
-                explanationText.textContent = this.state.quizData.chapters[this.state.currentChapter]
-                    .questions[this.state.currentQuestion].explanation;
-                explanation.classList.remove('hidden');
-                
-                // Show next button
-                const nextButton = document.getElementById('nextButton');
-                nextButton.classList.remove('hidden');
-                nextButton.onclick = () => this.handleNextQuestion();
-                
-                // Update score if provided
-                if (data.scores) {
-                    this.state.scores = data.scores;
-                    this.updatePlayerList();
-                }
+
+                // Show explanation for the current question
+                const chapter = this.state.quizData.chapters[this.state.currentChapter];
+                const question = chapter.questions[this.state.currentQuestion];
+
+                document.getElementById('explanationText').textContent = question.explanation;
+                document.getElementById('explanation').classList.remove('hidden');
+                document.getElementById('nextButton').classList.remove('hidden');
             }
         }
 

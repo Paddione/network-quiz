@@ -107,6 +107,7 @@ class NetworkQuizGame {
         this.state.currentChapter = 0;
         this.state.currentQuestion = 0;
         this.state.playerId = data.playerId;
+        this.state.gameId = data.gameId;
         this.setupChapterProgress();
         this.showQuestion();
         this.startTimer();
@@ -179,7 +180,7 @@ class NetworkQuizGame {
         this.state.answered = false;
     }
 
-    submitAnswer(answerIndex) {
+    submitAnswer(index) {
         if (this.state.answered) return;
         
         this.state.answered = true;
@@ -188,14 +189,17 @@ class NetworkQuizGame {
         const chapter = this.state.quizData.chapters[this.state.currentChapter];
         const question = chapter.questions[this.state.currentQuestion];
 
-        this.socket.emit('answer', {
+        const payload = {
             gameId: this.state.gameId,
             playerId: this.state.playerId,
             questionId: question.id,
-            answer: answerIndex,
-            isCorrect: (answerIndex === question.correct),
+            answer: index,
+            isCorrect: (index === question.correct),
             timeLeft: this.state.timeLeft
-        });
+        };
+        console.log("Submitting answer", payload);
+
+        this.socket.emit('answer', payload);
     }
 
     startTimer() {

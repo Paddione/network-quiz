@@ -154,14 +154,13 @@ io.on('connection', (socket) => {
     });
 
     socket.on('answer', (data) => {
+        console.log('Answer received on backend:', data);
         const game = findGameForPlayer(socket.id);
         if (game) {
-            // Broadcast answer to all players in the game
+            console.log('Broadcasting to sockets:', game.sockets.map(s => s.id));
             game.sockets.forEach(s => {
                 s.emit('answer', data);
             });
-
-            // Save answer to database if user is logged in
             if (data.playerId) {
                 savePlayerAnswer(data);
             }
