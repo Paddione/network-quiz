@@ -314,7 +314,7 @@
             let gamesHTML = '';
             games.forEach(game => {
                 gamesHTML += `
-                    <div class="game-item" data-id="${game.id}" data-code="${game.game_code}">
+                    <div class="game-item" data-id="${game.id}">
                         <div class="game-info">
                             <h4>${game.quiz_title}</h4>
                             <p>Spieler: ${game.player_count}/${game.max_players} • Typ: ${game.is_multiplayer ? 'Mehrspieler' : 'Einzelspieler'}</p>
@@ -332,9 +332,8 @@
                     e.stopPropagation();
                     const gameItem = btn.closest('.game-item');
                     const gameId = gameItem.dataset.id;
-                    const gameCode = gameItem.dataset.code;
 
-                    joinGame(gameId, gameCode);
+                    joinGame(gameId);
                 });
             });
 
@@ -351,8 +350,7 @@
 
                     // Store selected game
                     selectedGame = {
-                        id: item.dataset.id,
-                        code: item.dataset.code
+                        id: item.dataset.id
                     };
 
                     // Enable join button
@@ -373,17 +371,17 @@
             return;
         }
 
-        const playerName = document.getElementById('playerName').value.trim();
-        if (!playerName) {
-            showError('Bitte gib einen Spielernamen ein.');
-            return;
-        }
-
         const gameType = document.getElementById('gameType').value;
         const isSinglePlayer = gameType === 'single';
 
         try {
-            // Create game
+            if (isSinglePlayer) {
+                // For single player, just redirect to game page with mode=single
+                window.location.href = '/game.html?mode=single';
+                return;
+            }
+
+            // Create multiplayer game
             const createGameResponse = await fetch('/api/quiz/games', {
                 method: 'POST',
                 headers: {
@@ -391,8 +389,8 @@
                 },
                 body: JSON.stringify({
                     quiz_set_id: selectedPackage,
-                    is_multiplayer: !isSinglePlayer,
-                    player_count: isSinglePlayer ? 1 : 5 // Max 5 players for multiplayer
+                    is_multiplayer: true,
+                    player_count: 5 // Max 5 players for multiplayer
                 })
             });
 
@@ -403,27 +401,8 @@
                 return;
             }
 
-            // Add player to game
-            const addPlayerResponse = await fetch(`/api/quiz/games/${gameData.game_id}/players`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    player_name: playerName,
-                    user_id: currentUser ? currentUser.id : null
-                })
-            });
-
-            const playerData = await addPlayerResponse.json();
-
-            if (!playerData.success) {
-                showError(playerData.error || 'Fehler beim Hinzufügen des Spielers.');
-                return;
-            }
-
             // Redirect to game page
-            window.location.href = `/game.html?id=${gameData.game_id}&player=${playerData.player_id}&code=${gameData.game_code}`;
+            window.location.href = `/game.html?mode=multi&gameId=${gameData.game_id}`;
 
         } catch (error) {
             console.error('Create game error:', error);
@@ -432,36 +411,10 @@
     }
 
     // Join an existing game
-    async function joinGame(gameId, gameCode) {
-        const playerName = document.getElementById('playerName').value.trim();
-        if (!playerName) {
-            showError('Bitte gib einen Spielernamen ein.');
-            return;
-        }
-
+    async function joinGame(gameId) {
         try {
-            // Add player to game
-            const addPlayerResponse = await fetch(`/api/quiz/games/${gameId}/players`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    player_name: playerName,
-                    user_id: currentUser ? currentUser.id : null
-                })
-            });
-
-            const playerData = await addPlayerResponse.json();
-
-            if (!playerData.success) {
-                showError(playerData.error || 'Fehler beim Beitreten des Spiels.');
-                return;
-            }
-
-            // Redirect to game page
-            window.location.href = `/game.html?id=${gameId}&player=${playerData.player_id}&code=${gameCode}`;
-
+            // Redirect to game page with multiplayer mode
+            window.location.href = `/game.html?mode=multi&gameId=${gameId}`;
         } catch (error) {
             console.error('Join game error:', error);
             showError('Ein Fehler ist aufgetreten. Bitte versuche es später erneut.');
@@ -496,7 +449,7 @@
         document.getElementById('createGameBtn').addEventListener('click', createGame);
         document.getElementById('joinGameBtn').addEventListener('click', () => {
             if (selectedGame) {
-                joinGame(selectedGame.id, selectedGame.code);
+                joinGame(selectedGame.id);
             }
         });
     });

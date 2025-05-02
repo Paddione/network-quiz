@@ -1,62 +1,195 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="de">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Network Quiz - Test Your Networking Knowledge</title>
     <link rel="stylesheet" href="style.css">
+    <style>
+        /* Additional styles specific to the landing page */
+        .hero-section {
+            text-align: center;
+            padding: 60px 20px;
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            color: white;
+            border-radius: 15px;
+            margin-bottom: 40px;
+        }
+
+        .hero-section h1 {
+            font-size: 2.5em;
+            color: white;
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .hero-section p {
+            font-size: 1.2em;
+            max-width: 600px;
+            margin: 0 auto 30px;
+            opacity: 0.9;
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 30px;
+            margin: 40px 0;
+        }
+
+        .feature-card {
+            background: var(--card-bg);
+            border-radius: 10px;
+            padding: 30px;
+            text-align: center;
+            transition: transform 0.3s ease;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .feature-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .feature-icon {
+            font-size: 2.5em;
+            margin-bottom: 20px;
+            color: var(--primary-color);
+        }
+
+        .feature-card h3 {
+            font-size: 1.3em;
+            margin-bottom: 15px;
+            color: var(--text-color);
+        }
+
+        .feature-card p {
+            color: #666;
+            line-height: 1.6;
+        }
+
+        .cta-buttons {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            margin-top: 40px;
+        }
+
+        .btn {
+            padding: 12px 30px;
+            border-radius: 25px;
+            font-size: 1.1em;
+            text-decoration: none;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+
+        .primary-btn {
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        .secondary-btn {
+            background-color: white;
+            color: var(--primary-color);
+            border: 2px solid var(--primary-color);
+        }
+
+        .tertiary-btn {
+            background-color: rgba(255, 255, 255, 0.1);
+            color: var(--text-color);
+            border: 1px solid #ddd;
+        }
+
+        footer {
+            text-align: center;
+            margin-top: 60px;
+            padding: 20px;
+            color: #666;
+            border-top: 1px solid #eee;
+        }
+
+        @media (max-width: 768px) {
+            .hero-section {
+                padding: 40px 20px;
+            }
+
+            .hero-section h1 {
+                font-size: 2em;
+            }
+
+            .features-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .cta-buttons {
+                flex-direction: column;
+                gap: 15px;
+            }
+
+            .btn {
+                width: 100%;
+                text-align: center;
+            }
+        }
+    </style>
 </head>
 <body>
-<div class="container">
-    <header>
-        <h1>Network Quiz</h1>
-        <p>Test your knowledge of computer networking concepts</p>
-    </header>
+    <div class="container">
+        <section class="hero-section">
+            <h1>Network Quiz</h1>
+            <p>Teste dein Wissen über Computernetzwerke und verbessere deine Fähigkeiten in einer interaktiven Lernumgebung</p>
+        </section>
 
-    <main>
-        <div class="welcome-section">
-            <h2>Welcome to Network Quiz!</h2>
-            <p>Challenge yourself with questions about protocols, networking models, security, and more.</p>
+        <div class="features-grid">
+            <div class="feature-card">
+                <div class="feature-icon">📚</div>
+                <h3>Vielfältige Themen</h3>
+                <p>Von TCP/IP und OSI-Modell bis zu Routing, Switching und Sicherheit - wir decken alle wichtigen Netzwerkkonzepte ab.</p>
+            </div>
 
-            <div class="features">
-                <div class="feature-item">
-                    <h3>Multiple Topics</h3>
-                    <p>Questions covering TCP/IP, OSI model, routing, switching, and security</p>
-                </div>
-                <div class="feature-item">
-                    <h3>Track Progress</h3>
-                    <p>Create an account to save your scores and track your improvement</p>
-                </div>
-                <div class="feature-item">
-                    <h3>Compete</h3>
-                    <p>See how you rank against other networking enthusiasts</p>
-                </div>
+            <div class="feature-card">
+                <div class="feature-icon">📊</div>
+                <h3>Fortschritt tracken</h3>
+                <p>Verfolge deinen Lernfortschritt, siehe deine Statistiken und identifiziere Bereiche für Verbesserungen.</p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">🏆</div>
+                <h3>Multiplayer Modus</h3>
+                <p>Fordere andere Teilnehmer heraus und vergleiche dein Wissen in Echtzeit-Quizduellen.</p>
             </div>
         </div>
 
-        <div class="action-buttons">
-            <a href="/login.html" class="btn primary-btn">Login</a>
-            <a href="/register.html" class="btn secondary-btn">Register</a>
-            <a href="#" id="play-as-guest" class="btn tertiary-btn">Play as Guest</a>
+        <div class="cta-buttons">
+            <a href="/login" class="btn primary-btn">Anmelden</a>
+            <a href="/register" class="btn secondary-btn">Registrieren</a>
+            <a href="/lobby?mode=guest" class="btn tertiary-btn">Als Gast spielen</a>
         </div>
-    </main>
 
-    <footer>
-        <p>&copy; 2025 Network Quiz. All rights reserved.</p>
-    </footer>
-</div>
+        <footer>
+            <p>&copy; 2024 Network Quiz. Alle Rechte vorbehalten.</p>
+        </footer>
+    </div>
 
-<script src="/socket.io/socket.io.js"></script>
-<script src="quizData.js"></script>
-<script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Guest play functionality
-        document.getElementById('play-as-guest').addEventListener('click', function(e) {
-            e.preventDefault();
-            // Redirect to game page with guest flag
-            window.location.href = '/game.html?mode=guest';
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Check if user is already logged in
+            fetch('/api/user')
+                .then(response => response.json())
+                .then(user => {
+                    if (user && !user.error) {
+                        // User is logged in, redirect to lobby
+                        window.location.href = '/lobby';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error checking user session:', error);
+                });
         });
-    });
-</script>
+    </script>
 </body>
 </html>

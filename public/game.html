@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Network Quiz Game</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .screen {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        #debug {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: #f8f9fa;
+            padding: 10px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+            border-top: 2px solid #dee2e6;
+        }
+    </style>
+</head>
+<body>
+    <!-- Debug Panel -->
+    <div id="debug"></div>
+
+    <!-- Loading Screen -->
+    <div id="loadingScreen" class="screen">
+        <h2>Spiel wird geladen...</h2>
+        <div class="loading-spinner"></div>
+    </div>
+
+    <!-- Game Screen -->
+    <div id="gameScreen" class="screen hidden">
+        <div class="game-header">
+            <div class="player-scores" id="playerScores">
+                <!-- Player scores will be dynamically inserted here -->
+            </div>
+            <div class="game-info">
+                <div id="timer" class="timer">30</div>
+                <div id="questionCounter" class="question-counter"></div>
+            </div>
+        </div>
+
+        <div class="game-content">
+            <div id="chapterProgress" class="chapter-progress"></div>
+            <h3 id="chapterTitle"></h3>
+            <div class="question-container">
+                <p id="questionText"></p>
+                <div id="answerArea"></div>
+            </div>
+            <div id="explanation" class="hidden">
+                <h4>Erklärung:</h4>
+                <p id="explanationText"></p>
+            </div>
+            <button id="nextButton" class="hidden">Nächste Frage</button>
+        </div>
+    </div>
+
+    <!-- Chapter Result Screen -->
+    <div id="chapterResult" class="screen hidden">
+        <h2>Kapitel Ergebnis</h2>
+        <div id="chapterScores"></div>
+        <button onclick="game.handleNextChapter()">Nächstes Kapitel</button>
+    </div>
+
+    <!-- Final Result Screen -->
+    <div id="finalResult" class="screen hidden">
+        <h2>Spielende</h2>
+        <div id="finalScores"></div>
+        <div class="final-actions">
+            <a href="/lobby" class="button">Zurück zur Lobby</a>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        // Debug logging function
+        function log(message, data = null) {
+            const debug = document.getElementById('debug');
+            const timestamp = new Date().toLocaleTimeString();
+            const logMessage = data 
+                ? `${timestamp}: ${message} ${JSON.stringify(data)}` 
+                : `${timestamp}: ${message}`;
+            debug.innerHTML += logMessage + '<br>';
+            debug.scrollTop = debug.scrollHeight;
+            console.log(message, data);
+        }
+
+        class NetworkQuizGame {
+            constructor() {
+                log('Game constructor called');
+                this.state = {
+                    currentUser: null,
+                    players: [],
+                    currentQuestion: 0,
+                    currentChapter: 0,
+                    scores: {},
+                    timer: null,
+                    timeLeft: 30,
+                    answered: false,
+                    quizData: null,
+                    playerAnswers: {}
+                };
+                this.socket = null;
+                this.initialize();
+            }
+
+            async initialize() {
+                try {
+                    log('Initializing game...');
+                    
+                    // Get current user data
+                    const userResponse = await fetch('/api/user');
+                    log('User API response status:', userResponse.status);
+                    
+                    if (!userResponse.ok) {
+                        throw new Error('User not authenticated');
+                    }
+                    
+                    this.state.currentUser = await userResponse.json();
+                    log('Current user:', this.state.currentUser);
+
+                    // Initialize socket
+                    this.socket = io();
+                    log('Socket initialized');
+
+                    // Setup socket event listeners
+                    this.socket.on('connect', () => {
+                        log('Socket connected', this.socket.id);
+                        this.startGame();
+                    });
+
+                    this.socket.on('gameStarted', (data) => {
+                        log('Game started event received', data);
+                        this.handleGameStarted(data);
+                    });
+
+                    this.socket.on('gameError', (error) => {
+                        log('Game error received', error);
+                        alert(error.message);
+                        window.location.href = '/lobby';
+                    });
+
+                    this.socket.on('disconnect', () => {
+                        log('Socket disconnected');
+                    });
+
+                } catch (error) {
+                    log('Initialization error:', error.message);
+                    alert('Fehler beim Initialisieren des Spiels: ' + error.message);
+                    window.location.href = '/lobby';
+                }
+            }
+
+            startGame() {
+                const urlParams = new URLSearchParams(window.location.search);
+                const mode = urlParams.get('mode') || 'single';
+                log('Starting game with mode:', mode);
+
+                if (mode === 'single') {
+                    const quizSetId = urlParams.get('quizSetId');
+                    log('Emitting createSinglePlayer event', { quizSetId });
+                    
+                    this.socket.emit('createSinglePlayer', {
+                        userId: this.state.currentUser.id,
+                        username: this.state.currentUser.username,
+                        quizSetId: quizSetId || 1 // Fallback to ID 1 if not specified
+                    });
+                } else {
+                    const gameId = urlParams.get('gameId');
+                    if (!gameId) {
+                        log('No gameId provided for multiplayer mode');
+                        window.location.href = '/lobby';
+                        return;
+                    }
+                    
+                    log('Emitting joinGame event', { gameId });
+                    this.socket.emit('joinGame', {
+                        gameId,
+                        userId: this.state.currentUser.id,
+                        username: this.state.currentUser.username
+                    });
+                }
+            }
+
+            handleGameStarted(data) {
+                log('Handling game started', data);
+                
+                if (!data || !data.quiz) {
+                    log('Invalid game data received');
+                    return;
+                }
+
+                this.state.quizData = data.quiz;
+                this.state.players = data.players;
+                this.state.scores = data.scores;
+                this.state.currentChapter = 0;
+                this.state.currentQuestion = 0;
+                
+                log('Game state updated', this.state);
+                
+                this.setupChapterProgress();
+                
+                document.getElementById('loadingScreen').classList.add('hidden');
+                document.getElementById('gameScreen').classList.remove('hidden');
+                
+                this.showQuestion();
+                this.startTimer();
+            }
+
+            handleGameJoined(data) {
+                this.state.players = data.players;
+                this.updatePlayerList();
+            }
+
+            handlePlayerJoined(data) {
+                this.state.players = data.players;
+                this.state.scores = data.scores;
+                this.updatePlayerList();
+            }
+
+            handlePlayerAnswer(data) {
+                if (data.userId !== this.state.currentUser.id) {
+                    this.showOtherPlayerAnswer(data);
+                }
+                this.state.scores = data.scores;
+                this.updateScores();
+            }
+
+            handleQuestionTimeout() {
+                this.stopTimer();
+                if (!this.state.answered) {
+                    this.submitAnswer(null);
+                }
+            }
+
+            handlePlayerLeft(data) {
+                this.state.players = this.state.players.filter(p => p.id !== data.userId);
+                this.updatePlayerList();
+            }
+
+            updatePlayerList() {
+                const scoresDiv = document.getElementById('playerScores');
+                scoresDiv.innerHTML = '';
+                
+                this.state.players.forEach(player => {
+                    const scoreElement = document.createElement('div');
+                    scoreElement.className = 'player-score';
+                    scoreElement.innerHTML = `
+                        <span class="player-name">${player}</span>
+                        <span class="score">${this.state.scores[player] || 0}</span>
+                    `;
+                    scoresDiv.appendChild(scoreElement);
+                });
+            }
+
+            showQuestion() {
+                log('Showing question', {
+                    chapter: this.state.currentChapter,
+                    question: this.state.currentQuestion
+                });
+
+                const chapter = this.state.quizData.chapters[this.state.currentChapter];
+                const question = chapter.questions[this.state.currentQuestion];
+                
+                document.getElementById('chapterTitle').textContent = chapter.title;
+                document.getElementById('questionText').textContent = question.question;
+                document.getElementById('questionCounter').textContent = 
+                    `Frage ${this.state.currentQuestion + 1}/${chapter.questions.length}`;
+                
+                const answerArea = document.getElementById('answerArea');
+                answerArea.innerHTML = '';
+                
+                const optionsDiv = document.createElement('div');
+                optionsDiv.className = 'options';
+                
+                question.options.forEach((option, index) => {
+                    const optionElement = document.createElement('div');
+                    optionElement.className = 'option';
+                    optionElement.textContent = option.text;
+                    optionElement.onclick = () => this.submitAnswer(index);
+                    optionsDiv.appendChild(optionElement);
+                });
+                
+                answerArea.appendChild(optionsDiv);
+                
+                document.getElementById('explanation').classList.add('hidden');
+                document.getElementById('nextButton').classList.add('hidden');
+                this.state.answered = false;
+            }
+
+            submitAnswer(index) {
+                log('Submitting answer', { index });
+                
+                this.socket.emit('submitAnswer', {
+                    questionIndex: this.state.currentQuestion,
+                    chapterIndex: this.state.currentChapter,
+                    answer: index
+                });
+            }
+
+            startTimer() {
+                this.state.timeLeft = 30;
+                this.updateTimerDisplay();
+                
+                this.state.timer = setInterval(() => {
+                    this.state.timeLeft--;
+                    this.updateTimerDisplay();
+                    
+                    if (this.state.timeLeft <= 0) {
+                        this.handleQuestionTimeout();
+                    }
+                }, 1000);
+            }
+
+            stopTimer() {
+                if (this.state.timer) {
+                    clearInterval(this.state.timer);
+                    this.state.timer = null;
+                }
+            }
+
+            updateTimerDisplay() {
+                document.getElementById('timer').textContent = this.state.timeLeft;
+            }
+
+            handleNextQuestion() {
+                this.stopTimer();
+                this.state.currentQuestion++;
+                
+                if (this.state.currentQuestion >= this.state.quizData.chapters[this.state.currentChapter].questions.length) {
+                    this.showChapterResult();
+                } else {
+                    this.showQuestion();
+                    this.startTimer();
+                }
+            }
+
+            handleNextChapter() {
+                this.state.currentChapter++;
+                this.state.currentQuestion = 0;
+                
+                if (this.state.currentChapter >= this.state.quizData.chapters.length) {
+                    this.showFinalResult();
+                } else {
+                    document.getElementById('chapterResult').classList.add('hidden');
+                    document.getElementById('gameScreen').classList.remove('hidden');
+                    this.showQuestion();
+                    this.startTimer();
+                }
+            }
+
+            setupChapterProgress() {
+                const progress = document.getElementById('chapterProgress');
+                progress.innerHTML = '';
+                
+                this.state.quizData.chapters.forEach((chapter, index) => {
+                    const indicator = document.createElement('div');
+                    indicator.className = 'chapter-indicator';
+                    indicator.textContent = index + 1;
+                    
+                    if (index === this.state.currentChapter) {
+                        indicator.classList.add('active');
+                    } else if (index < this.state.currentChapter) {
+                        indicator.classList.add('completed');
+                    }
+                    
+                    progress.appendChild(indicator);
+                });
+            }
+
+            showChapterResult() {
+                document.getElementById('gameScreen').classList.add('hidden');
+                document.getElementById('chapterResult').classList.remove('hidden');
+                
+                const scoresDiv = document.getElementById('chapterScores');
+                scoresDiv.innerHTML = '';
+                
+                this.state.players.forEach(player => {
+                    const scoreElement = document.createElement('div');
+                    scoreElement.className = 'player-chapter-score';
+                    scoreElement.innerHTML = `
+                        <span class="player-name">${player}</span>
+                        <span class="score">${this.state.scores[player] || 0}</span>
+                    `;
+                    scoresDiv.appendChild(scoreElement);
+                });
+            }
+
+            showFinalResult() {
+                document.getElementById('gameScreen').classList.add('hidden');
+                document.getElementById('chapterResult').classList.add('hidden');
+                document.getElementById('finalResult').classList.remove('hidden');
+                
+                const scoresDiv = document.getElementById('finalScores');
+                scoresDiv.innerHTML = '';
+                
+                // Sort players by score
+                const sortedPlayers = [...this.state.players].sort((a, b) => 
+                    (this.state.scores[b] || 0) - (this.state.scores[a] || 0)
+                );
+                
+                sortedPlayers.forEach((player, index) => {
+                    const scoreElement = document.createElement('div');
+                    scoreElement.className = 'player-final-score';
+                    scoreElement.innerHTML = `
+                        <span class="position">${index + 1}.</span>
+                        <span class="player-name">${player}</span>
+                        <span class="score">${this.state.scores[player] || 0}</span>
+                    `;
+                    scoresDiv.appendChild(scoreElement);
+                });
+            }
+        }
+
+        // Initialize game when document is loaded
+        document.addEventListener('DOMContentLoaded', () => {
+            log('Document loaded, initializing game...');
+            window.game = new NetworkQuizGame();
+        });
+    </script>
+</body>
+</html>

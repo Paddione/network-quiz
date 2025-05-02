@@ -84,7 +84,63 @@ let waitingPlayers = [];
 
 // Handle socket connections
 io.on('connection', (socket) => {
-    console.log('User connected:', socket.id);
+    console.log('Socket connected:', socket.id);
+
+    socket.on('createSinglePlayer', async (data) => {
+        console.log('createSinglePlayer event received:', data);
+        try {
+            // Get quiz set
+            const quizSetId = data.quizSetId || 1; // Fallback to ID 1 if not specified
+            const quizResult = await pool.query(`
+                SELECT id, title, description 
+                FROM quiz_sets 
+                WHERE id = $1 AND is_active = TRUE`,
+                [quizSetId]
+            );
+            
+            console.log('Quiz set query result:', quizResult.rows);
+
+            if (quizResult.rows.length === 0) {
+                console.log('Quiz set not found or inactive');
+                socket.emit('gameError', { message: 'Quiz set not found or inactive' });
+                return;
+            }
+
+            // Get quiz data
+            const quizData = await getQuizData(quizSetId);
+            console.log('Quiz data fetched');
+
+            // Create game in database
+            const gameResult = await pool.query(
+                'INSERT INTO games (quiz_set_id, is_multiplayer, game_code, player_count) VALUES ($1, $2, $3, $4) RETURNING id',
+                [quizSetId, false, generateGameId(), 1]
+            );
+
+            const gameId = gameResult.rows[0].id;
+            console.log('Game created with ID:', gameId);
+
+            // Create player in database
+            const playerResult = await pool.query(
+                'INSERT INTO game_players (game_id, user_id, player_name, score) VALUES ($1, $2, $3, $4) RETURNING id',
+                [gameId, data.userId, data.username, 0]
+            );
+
+            console.log('Player created:', playerResult.rows[0]);
+
+            // Send game data to player
+            socket.emit('gameStarted', {
+                players: [data.username],
+                scores: { [data.username]: 0 },
+                playerId: playerResult.rows[0].id,
+                gameId: gameId,
+                quiz: quizData
+            });
+
+        } catch (error) {
+            console.error('Error creating single player game:', error);
+            socket.emit('gameError', { message: 'Failed to create game: ' + error.message });
+        }
+    });
 
     socket.on('join', (data) => {
         handleJoin(socket, data);
@@ -144,6 +200,7 @@ io.on('connection', (socket) => {
     });
 
     socket.on('disconnect', () => {
+        console.log('Socket disconnected:', socket.id);
         handleDisconnect(socket);
     });
 });

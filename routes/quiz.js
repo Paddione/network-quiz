@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../database/db');
 const { isAuthenticated } = require('./auth');
+const { generateGameCode } = require('../utils/gameUtils');
 
 // Get active quiz sets for voting
 router.get('/sets', async (req, res) => {
@@ -176,11 +177,19 @@ router.get('/game-data/:id', async (req, res) => {
 
 // Create a new game
 router.post('/games', async (req, res) => {
-    const { quiz_set_id, is_multiplayer = true, player_count = 1 } = req.body;
+    const { quiz_set_id, is_multiplayer, player_count } = req.body;
 
     try {
         // Generate a unique game code
-        const gameCode = Math.random().toString(36).substring(2, 12);
+        let gameCode;
+        let isUnique = false;
+        while (!isUnique) {
+            gameCode = generateGameCode();
+            const existingGame = await db.query('SELECT id FROM games WHERE game_code = $1', [gameCode]);
+            if (existingGame.rows.length === 0) {
+                isUnique = true;
+            }
+        }
 
         // Create game
         const result = await db.query(
