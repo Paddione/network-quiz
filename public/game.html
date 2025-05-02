@@ -173,6 +173,10 @@
                         log('Socket disconnected');
                     });
 
+                    this.socket.on('answer', (data) => {
+                        this.handleAnswer(data);
+                    });
+
                 } catch (error) {
                     log('Initialization error:', error.message);
                     alert('Fehler beim Initialisieren des Spiels: ' + error.message);
@@ -305,7 +309,7 @@
                 question.options.forEach((option, index) => {
                     const optionElement = document.createElement('div');
                     optionElement.className = 'option';
-                    optionElement.textContent = option.text;
+                    optionElement.textContent = option;
                     optionElement.onclick = () => this.submitAnswer(index);
                     optionsDiv.appendChild(optionElement);
                 });
@@ -318,12 +322,15 @@
             }
 
             submitAnswer(index) {
+                if (this.state.answered) return; // Prevent multiple answers
+                
                 log('Submitting answer', { index });
                 
                 this.socket.emit('submitAnswer', {
                     questionIndex: this.state.currentQuestion,
                     chapterIndex: this.state.currentChapter,
-                    answer: index
+                    answer: index,
+                    timeLeft: this.state.timeLeft
                 });
             }
 
@@ -438,6 +445,42 @@
                     `;
                     scoresDiv.appendChild(scoreElement);
                 });
+            }
+
+            handleAnswer(data) {
+                this.state.answered = true;
+                this.stopTimer();
+                
+                // Show correct/wrong answer
+                const options = document.querySelectorAll('.option');
+                const correctOption = this.state.quizData.chapters[this.state.currentChapter]
+                    .questions[this.state.currentQuestion].correct;
+                
+                options.forEach((option, index) => {
+                    if (index === correctOption) {
+                        option.classList.add('correct');
+                    } else if (index === data.answer && index !== correctOption) {
+                        option.classList.add('wrong');
+                    }
+                });
+                
+                // Show explanation
+                const explanation = document.getElementById('explanation');
+                const explanationText = document.getElementById('explanationText');
+                explanationText.textContent = this.state.quizData.chapters[this.state.currentChapter]
+                    .questions[this.state.currentQuestion].explanation;
+                explanation.classList.remove('hidden');
+                
+                // Show next button
+                const nextButton = document.getElementById('nextButton');
+                nextButton.classList.remove('hidden');
+                nextButton.onclick = () => this.handleNextQuestion();
+                
+                // Update score if provided
+                if (data.scores) {
+                    this.state.scores = data.scores;
+                    this.updatePlayerList();
+                }
             }
         }
 

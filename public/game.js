@@ -11,7 +11,8 @@ class NetworkQuizGame {
             answered: false,
             currentQuiz: null,
             playerAnswers: {},
-            gameId: null
+            gameId: null,
+            playerId: null
         };
 
         this.socket = null;
@@ -102,8 +103,10 @@ class NetworkQuizGame {
     }
 
     handleGameStarted(data) {
+        this.state.quizData = data.quiz;
         this.state.currentChapter = 0;
         this.state.currentQuestion = 0;
+        this.state.playerId = data.playerId;
         this.setupChapterProgress();
         this.showQuestion();
         this.startTimer();
@@ -145,7 +148,7 @@ class NetworkQuizGame {
     }
 
     showQuestion() {
-        const chapter = quizData[this.state.currentQuiz].chapters[this.state.currentChapter];
+        const chapter = this.state.quizData.chapters[this.state.currentChapter];
         const question = chapter.questions[this.state.currentQuestion];
         
         document.getElementById('chapterTitle').textContent = chapter.title;
@@ -182,12 +185,15 @@ class NetworkQuizGame {
         this.state.answered = true;
         this.stopTimer();
         
-        this.socket.emit('submitAnswer', {
+        const chapter = this.state.quizData.chapters[this.state.currentChapter];
+        const question = chapter.questions[this.state.currentQuestion];
+
+        this.socket.emit('answer', {
             gameId: this.state.gameId,
-            userId: this.state.currentUser.id,
-            questionIndex: this.state.currentQuestion,
-            chapterIndex: this.state.currentChapter,
+            playerId: this.state.playerId,
+            questionId: question.id,
             answer: answerIndex,
+            isCorrect: (answerIndex === question.correct),
             timeLeft: this.state.timeLeft
         });
     }

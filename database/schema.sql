@@ -77,7 +77,7 @@ CREATE TABLE games (
                        started_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                        ended_at TIMESTAMP WITH TIME ZONE,
                        is_multiplayer BOOLEAN DEFAULT TRUE,
-                       game_code VARCHAR(10) UNIQUE,
+                       game_code VARCHAR(50) UNIQUE,
                        player_count INTEGER DEFAULT 1
 );
 
